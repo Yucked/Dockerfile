@@ -11,21 +11,24 @@ RUN apk add --no-cache \
     tzdata \
     userspace-rcu \
     curl \
+    libstdc++ \
     R \
+    R-dev \
     procps \
     bash \
+    gcc \
+    musl-dev \
+    rust \
+    cargo \
     libgdiplus --repository https://dl-3.alpinelinux.org/alpine/edge/testing/ \
     lttng-ust --repository https://dl-cdn.alpinelinux.org/alpine/edge/main
 
 # Setup glibc
-RUN curl --remote-name-all https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.34-r0/{glibc-2.34-r0.apk,file2}
 RUN curl https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub -o /etc/apk/keys/sgerrand.rsa.pub && \
     curl -L https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.34-r0/glibc-2.34-r0.apk -o glibc-2.34-r0.apk && \
-    apk add --allow-untrusted --force-overwrite glibc-2.34-r0.apk && \
     curl -L https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.34-r0/glibc-bin-2.34-r0.apk -o glibc-bin-2.34-r0.apk && \
-    apk add --allow-untrusted --force-overwrite glibc-bin-2.34-r0.apk && \
-    curl -L https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.34-r0/glibc-i18n-2.34-r0.apk -o glibc-i18n-2.34-r0.apk && \
-    apk add --allow-untrusted --force-overwrite glibc-i18n-2.34-r0.apk
+    apk add --allow-untrusted --force-overwrite glibc-2.34-r0.apk glibc-bin-2.34-r0.apk && \
+    /usr/glibc-compat/sbin/ldconfig /lib /usr/glibc-compat/lib
 
 # Install Miniconda
 ARG CONDA_ROOT=/home/miniconda
@@ -55,12 +58,15 @@ ENV DOTNET_ROOT=/root/.dotnet
 ENV PATH=$PATH:${CONDA_ROOT}/bin:${DOTNET_ROOT}:${DOTNET_ROOT}/tools:${PS_LOC}:${DOTNET_ROOT}/dotnet
 
 # Install C++, Jupyterlab, update packages, .Net and R Kernel
-RUN conda install -y sqlite jupyterlab xeus-cling -c conda-forge && conda update --all && \
+RUN conda install -y sqlite jupyterlab xeus-cling -c conda-forge && \
+    conda update --all && \
+    mkdir ${NOTEBOOKS_DIR} && \
     dotnet tool install -g Microsoft.dotnet-interactive && \
-    dotnet interactive jupyter install && \     
-    R | bash /dev/stdin "install.packages(c('repr', 'IRdisplay', 'IRkernel'), type = 'source')" && \
-    R | bash /dev/stdin "IRkernel::installspec(user = FALSE)" && \
-    mkdir ${NOTEBOOKS_DIR}
+    dotnet interactive jupyter install
+    
+RUN R | bash /dev/stdin "install.packages(c('repr', 'IRdisplay', 'evaluate', 'crayon', 'pbdZMQ', 'devtools', 'uuid', 'digest'), repos="http://cran.r-project.org")"
+RUN R | bash /dev/stdin "devtools::install_github('IRkernel/IRkernel')"
+RUN R | bash /dev/stdin "IRkernel::installspec()"
 
 EXPOSE ${JUPYTER_PORT}
 WORKDIR ${NOTEBOOKS_DIR}
